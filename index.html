@@ -61,17 +61,16 @@
         }
 
         /* Last section shouldn't force 100vh if we want it to end naturally */
-        section:last-of-type {
-            min-height: auto; 
-            height: auto; /* Force it to be exactly one screen height at the end */
-            align-items: center; /* Center strictly */
-            padding-top: 100vh;
-            padding-bottom: 0;
-            margin-bottom: 0;
-        /* min-height: auto; 
-            align-items: flex-start;  Align to top of section area 
-            padding-top: 20vh;*/
-        }
+@media only screen and (max-width: 768px) {
+    section:last-of-type {
+        min-height: auto; 
+        height: auto;
+        align-items: center;
+        padding-top: 100vh; /* Takes up a full screen height of padding */
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+}
 
         /* --- CARDS (Glassmorphism) --- */
         .card {
