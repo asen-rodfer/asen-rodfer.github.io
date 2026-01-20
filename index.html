@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asensio Rodriguez - Interactive CV</title>
+    <style>
+        /* --- CSS STYLING --- */
+        :root {
+            --bg-color: #f5f5f7;
+            --text-main: #1d1d1f;
+            --text-muted: #86868b;
+            --accent: #007aff;
+            --card-bg: rgba(255, 255, 255, 0.65);
+            --card-blur: 25px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden; /* No horizontal scroll */
+            color: var(--text-main);
+        }
+
+        /* Fixed 3D Canvas Background */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+            outline: none;
+            /* Disable pointer events so drag doesn't interfere */
+            pointer-events: none; 
+        }
+
+        /* Scrollable Content Area */
+        .content-container {
+            position: relative;
+            z-index: 2;
+            /* Ensure cards are clickable */
+            pointer-events: none; 
+            padding-bottom: 0px; /* Small padding at bottom instead of huge space */
+        }
+
+        /* Enable pointer events only on interactive elements */
+        .card, .btn {
+            pointer-events: auto;
+        }
+
+        /* Sections for content */
+        section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Last section shouldn't force 100vh if we want it to end naturally */
+        section:last-of-type {
+            min-height: auto; 
+            height: auto; /* Force it to be exactly one screen height at the end */
+            align-items: center; /* Center strictly */
+            padding-top: 100vh;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        /* min-height: auto; 
+            align-items: flex-start;  Align to top of section area 
+            padding-top: 20vh;*/
+        }
+
+        /* --- CARDS (Glassmorphism) --- */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--card-blur));
+            -webkit-backdrop-filter: blur(var(--card-blur));
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 520px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+            border: 1px solid rgba(255,255,255,0.4);
+            /* Initial state for animation */
+            transform: translateY(30px);
+            opacity: 0;
+        }
+
+        /* Profile Photo */
+        .profile-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .profile-img {
+            width: 120px; height: 120px; border-radius: 50%;
+            object-fit: cover; border: 2px solid white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            background-color: #ccc;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #1d1d1f 0%, #434344 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 { font-size: 1.8rem; font-weight: 700; margin: 0 0 15px 0; }
+        h3 { font-size: 0.9rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin: 0; }
+        p, li { font-size: 1.1rem; line-height: 1.6; color: #424245; margin-bottom: 12px; }
+        ul { padding-left: 20px; margin: 0; }
+        .highlight { font-weight: 600; color: var(--text-main); }
+
+        .tag {
+            display: inline-block; background: rgba(0, 122, 255, 0.1);
+            color: var(--accent); padding: 6px 12px; border-radius: 8px;
+            font-size: 0.85rem; font-weight: 600; margin-right: 6px; margin-bottom: 6px;
+        }
+
+        .btn {
+            display: inline-block; background: var(--text-main); color: white;
+            text-decoration: none; padding: 14px 28px; border-radius: 100px;
+            font-weight: 600; margin-top: 15px; transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .btn:hover { transform: scale(1.02); }
+
+        /* Responsive Layout */
+        @media (min-width: 900px) { section { justify-content: flex-start; padding-left: 8%; } }
+        @media (max-width: 899px) {
+            section { align-items: flex-end; padding-bottom: 50px; }
+            .card { padding: 25px; margin: 0 auto; }
+            h1 { font-size: 2.2rem; }
+        }
+
+        /* Simple Loading Text */
+        #loader {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            color: #86868b;
+            font-weight: 500;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+    </style>
+
+    <!-- Import Maps for Three.js v0.160.0 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- Loading Text -->
+    <div id="loader">Loading Model...</div>
+
+    <!-- 3D Scene Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Scroll Trigger Area (With Cards) -->
+    <div class="content-container">
+        
+        <!-- 1. INTRO -->
+        <section class="step">
+            <div class="card">
+                <div class="profile-header">
+                    <img src="perfil.png" alt="Asensio" class="profile-img" onerror="this.style.display='none'">
+                    <div>
+                        <h3>Organic & Computational Chemist</h3>
+                        <h1>Asensio Rodriguez</h1>
+                    </div>
+                </div>
+                <p>Master in <strong>EMTCCM</strong><br>(Computational Chemical Modeling).</p>
+                <p>Specializing in deep learning models for ligand-protein structures and ligand optimization.</p>
+                
+                <a href="mailto:asensio.rodfer@gmail.com" class="btn" style="margin-bottom: 20px;">Contact Me</a>
+
+                <div class="tag-container">
+                    <span class="tag">CUDA</span>
+                    <span class="tag">C++</span>
+                    <span class="tag">Python</span>
+                    <span class="tag">Pytorch</span>
+                    <span class="tag">Fortran</span>
+                    <span class="tag">Organic Chemistry</span>
+                    <span class="tag">Pharmaceutical Chemistry</span>
+                    <span class="tag">English C1</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. EDUCATION -->
+        <section class="step">
+            <div class="card">
+                <h3>Academic Excellence</h3>
+                <h2>Education</h2>
+                <p><span class="highlight">B.Sc. Chemistry</span> (2020-2024)<br>
+                Autonomous University of Madrid<br>
+                <small style="color:var(--accent);">★ Avg Grade: 8.65 (Top 2% of class)</small></p>
+                <p><span class="highlight">M.Sc. Theoretical Chemistry</span> (2024-Present)<br>
+                Erasmus Mundus (EMTCCM). Avg Grade: 9.00</p>
+                <p><strong>Awards:</strong> 10 Honors (Matrícula de Honor), Gold Medal Argentine Chemistry Olympiad (2018), Outstanding Student Award (UBA).</p>
+            </div>
+        </section>
+
+        <!-- 3. RESEARCH -->
+        <section class="step">
+            <div class="card">
+                <h3>Professional Experience</h3>
+                <h2>Research Fellowships</h2>
+                <ul>
+                    <li><strong>CSIC (IQM, Paula Morales):</strong> JAE Intro. Deep learning for endocannabinoid receptors (2024-).</li>
+                    <li><strong>ICIQ (Llobet's Group):</strong> Summer fellowship 2024.</li>
+                    <li><strong>UAM (Carretero's Group):</strong> Collaboration fellowship (2023-2024).</li>
+                    <li><strong>CIQUS (Gonzalez-Bello):</strong> Antibacterial agents against drug-resistant bacteria (2023).</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 4. CONFERENCES  -->
+        <section class="step">
+            <div class="card">
+                <h3>Dissemination</h3>
+                <h2>Conferences</h2>
+                <p><strong>SeaCat Conference (UAB 2024):</strong><br>
+                "Diazonium functionalized cobalt quaterpyridine for CO2 reduction over graphitic surfaces."</p>
+                <p><strong>USC-CIQUS Conference (2023):</strong><br>
+                "Precision antibacterial agents against superbugs."</p>
+            </div>
+        </section>
+
+        <!-- 5. CONTACT (LAST SECTION) -->
+        <section class="step" id="last-step">
+            <div class="card">
+                <h3>Beyond the Lab</h3>
+                <h2>Leadership & Service</h2>
+                <p><strong>University Delegate:</strong> 5 consecutive years at UAM.</p>
+                <p><strong>Service Dog Trainer:</strong> Volunteer at ONCE (2020-).</p>
+                <p><strong>Athlete:</strong> Competitive Cross-country and Fencing representing UAM.</p>
+                <a href="mailto:asensio.rodfer@gmail.com" class="btn">Get in Touch</a>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- GSAP Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+    <!-- Main Logic -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+        // --- CONFIGURATION ---
+        const FILENAME = 'thc_full.glb'; 
+        const LIGAND_NAME = 'cluster_rep_5_frame_1258.pdb';
+        const POCKET_NAME = 'cluster_rep_5_frame_1258.pdb_1'; 
+
+        // --- CAMERA COORDINATE DEFINITIONS ---
+        const START_POS = new THREE.Vector3(1.68, -109.36, 9.59);
+        const END_POS = new THREE.Vector3(7, -28, 12);
+        //const END_POS = new THREE.Vector3(11.82, -10.60, 11.68);
+        
+        const START_ROT = new THREE.Euler(1.51, -0.02, 0.17);
+        const END_ROT = new THREE.Euler(1.62, -0.10, -0.33);
+        const START_QUAT = new THREE.Quaternion().setFromEuler(START_ROT);
+        const END_QUAT = new THREE.Quaternion().setFromEuler(END_ROT);
+
+        // --- ANIMATION STATE ---
+        const animationState = {
+            progress: 0
+        };
+
+        // --- PARALLAX STATE ---
+        const cursor = { x: 0, y: 0 };
+        let rootModel = null; 
+
+        // Track Mouse Movement for Parallax
+        window.addEventListener('mousemove', (event) => {
+            cursor.x = (event.clientX / window.innerWidth) - 0.5;
+            cursor.y = (event.clientY / window.innerHeight) - 0.5;
+        });
+
+        // --- SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000); 
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.SoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // --- LIGHTING ---
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture;
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+        dirLight.position.set(5, -10, 10); 
+        dirLight.castShadow = true;
+        dirLight.shadow.normalBias = 0.05; 
+        dirLight.shadow.bias = -0.0001;
+        dirLight.shadow.mapSize.width = 2048; 
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.PointLight(0xffffff, 0.8);
+        fillLight.position.set(-5, 0, 5);
+        scene.add(fillLight);
+
+        // --- LOAD LOGIC ---
+        const loader = new GLTFLoader();
+
+        loader.load(FILENAME, (gltf) => {
+            const model = gltf.scene;
+            rootModel = model; 
+
+            // Center Model
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center); 
+            
+            scene.add(model);
+            
+            document.getElementById('loader').style.opacity = 0;
+
+            let ligand = null;
+            let pocket = null;
+
+            // 1. Identify Parts
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if(child.material) {
+                        child.material.roughness = 0.4;
+                        child.material.metalness = 0.1;
+                    }
+                }
+                if (child.name === LIGAND_NAME || child.name === 'cluster_rep_5_frame_1258pdb') {
+                    ligand = child;
+                }
+                if (child.name === POCKET_NAME || child.name === 'cluster_rep_5_frame_1258pdb_1') {
+                    pocket = child;
+                }
+            });
+
+            // 2. Process Pocket Materials
+            const pocketMaterials = [];
+            if (pocket) {
+                pocket.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material = child.material.clone();
+                        child.material.transparent = true;
+                        child.material.opacity = 1.0; 
+                        child.material.depthWrite = true;
+                        child.material.side = THREE.DoubleSide; 
+                        pocketMaterials.push(child.material);
+                    }
+                });
+            }
+
+            if (ligand && pocket) {
+                initScrollAnimation(ligand, pocketMaterials, model);
+            } else {
+                console.error("Nodes not found. Check names:", LIGAND_NAME, POCKET_NAME);
+            }
+
+        }, undefined, (error) => {
+            console.error('Error loading model:', error);
+            document.getElementById('loader').innerText = "Error loading .glb file.";
+        });
+
+        // --- ANIMATION (GSAP) ---
+        function initScrollAnimation(ligand, pocketMaterials, wholeGroup) {
+            gsap.registerPlugin(ScrollTrigger);
+            
+            const finalPos = ligand.position.clone();
+            const finalRot = ligand.rotation.clone();
+
+            // Initial State: Ligand hovers above
+            ligand.position.y += 4; 
+            ligand.rotation.x += Math.PI / 6; 
+            ligand.rotation.z += Math.PI / 12;
+
+            const tl = gsap.timeline({
+                scrollTrigger: {
+                    trigger: "body",
+                    start: "top top",
+                    end: "bottom bottom",
+                    scrub: 1.5,
+                }
+            });
+
+            // 1. Ligand Docking (Standard GSAP)
+            tl.to(ligand.position, {
+                x: finalPos.x, y: finalPos.y, z: finalPos.z,
+                duration: 5, ease: "power2.inOut"
+            })
+            .to(ligand.rotation, {
+                x: finalRot.x, y: finalRot.y, z: finalRot.z,
+                duration: 5, ease: "power2.inOut"
+            }, "<")
+            
+            // 2. Pocket Disappearing
+            .to(pocketMaterials, {
+                opacity: 0, 
+                duration: 5, ease: "power1.inOut"
+            }, "<")
+            
+            // 3. Camera Progress State
+            .to(animationState, {
+                progress: 1,
+                duration: 5,
+                ease: "power2.inOut"
+            }, "<");
+
+            // 4. Card Animations
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                gsap.to(card, {
+                    opacity: 1, y: 0, duration: 1, ease: "power2.out",
+                    scrollTrigger: {
+                        trigger: card,
+                        start: "top 85%", // Animation start point
+                        end: "top 45%",
+                        scrub: 1
+                    }
+                });
+            });
+        }
+
+        // --- RESIZE HANDLER ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- RESPONSIVE MATH HELPER ---
+        function getResponsiveScale() {
+            const aspect = window.innerWidth / window.innerHeight;
+            const refAspect = 1.6; 
+            if (aspect < refAspect) {
+                return refAspect / aspect;
+            }
+            return 1.0;
+        }
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. Interpolate Base State (Position & Rotation) from GSAP progress
+            const basePos = new THREE.Vector3().lerpVectors(START_POS, END_POS, animationState.progress);
+            const baseQuat = new THREE.Quaternion().slerpQuaternions(START_QUAT, END_QUAT, animationState.progress);
+
+            // 2. Responsive Logic
+            const aspect = window.innerWidth / window.innerHeight;
+            const responsiveScale = getResponsiveScale(); 
+            const currentDist = basePos.length();
+            const isMobile = aspect < 1.0;
+
+            // --- COMPOSITION OFFSET ---
+            if (!isMobile) {
+                // Desktop: Shift right (Increased to 0.20 to balance)
+                const leftVec = new THREE.Vector3(-1, 0, 0).applyQuaternion(baseQuat);
+                basePos.add(leftVec.multiplyScalar(currentDist * 0.30)); 
+            } else {
+                // Mobile: Shift up (Increased to 0.45)
+                const downVec = new THREE.Vector3(0, -1, 0).applyQuaternion(baseQuat);
+                basePos.add(downVec.multiplyScalar(currentDist * 0.45));
+            }
+
+            // 3. Responsive Zoom
+            if (responsiveScale > 1.0) {
+                const backVec = new THREE.Vector3(0, 0, 1).applyQuaternion(baseQuat);
+                const extraDist = currentDist * (responsiveScale - 1);
+                basePos.add(backVec.multiplyScalar(extraDist));
+            }
+
+            // 4. Apply final transform to camera
+            camera.position.copy(basePos);
+            camera.quaternion.copy(baseQuat);
+
+            // 5. Parallax Effect (Always Active, No Dragging)
+            if (rootModel) {
+                const targetRotX = cursor.y * 0.1; 
+                const targetRotY = cursor.x * 0.1; 
+
+                rootModel.rotation.x += (targetRotX - rootModel.rotation.x) * 0.05;
+                rootModel.rotation.y += (targetRotY - rootModel.rotation.y) * 0.05;
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+</body>
+</html>
